@@ -41,8 +41,8 @@
             height: 40px;
             animation: spin 1s linear infinite;
         }
-        #qibla-arrow {
-            transition: transform 0.5s ease-in-out;
+        #qibla-arrow-container {
+            transition: transform 0.2s linear;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -79,7 +79,7 @@
 
             </div>
             <footer class="text-center mt-6 text-gray-500 text-sm">
-                <p>Prayer times by <a href="https://www.youtube.com/@tawhidhasan4468" target="_blank" class="text-blue-500 hover:underline">Hasan</a>.</p>
+                <p>Prayer times by <a href="https://x.com/TawhidHasan16" target="_blank" class="text-blue-500 hover:underline">TAWHID HASAN</a>.</p>
             </footer>
         </main>
 
@@ -105,7 +105,15 @@
                 <button class="close-modal-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl" data-modal="qibla-modal">&times;</button>
                 <h2 class="text-2xl font-bold mb-4">Qibla Direction</h2>
                 <div id="qibla-loader" class="flex flex-col items-center justify-center my-4"><div class="loader mb-2"></div><p>Getting your location...</p></div>
-                <div id="qibla-display" class="hidden"><div class="relative w-48 h-48 mx-auto my-4"><img src="https://placehold.co/200x200/ffffff/cccccc?text=Compass" class="w-full h-full" alt="Compass Base"/><div id="qibla-arrow" class="absolute inset-0 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M12 2L12 22M12 2L6 8M12 2L18 8"/></svg></div></div><p id="qibla-angle" class="text-lg font-semibold"></p><p class="text-sm text-gray-500 mt-2">Point the top of your device towards North to align.</p></div>
+                <div id="qibla-display" class="hidden">
+                    <div class="relative w-48 h-48 mx-auto my-4 bg-gray-200 rounded-full flex items-center justify-center" style="background-image: url('https://placehold.co/200x200/f3f4f6/9ca3af?text=N'); background-size: cover;">
+                        <div id="qibla-arrow-container" class="absolute inset-0 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L12 12M12 2L6 8M12 2L18 8"/></svg>
+                        </div>
+                    </div>
+                    <p id="qibla-angle" class="text-lg font-semibold"></p>
+                    <p class="text-sm text-gray-500 mt-2">Align the arrow with the top of the compass to face the Qibla.</p>
+                </div>
                 <p id="qibla-error" class="text-red-500 hidden"></p>
             </div>
         </div>
@@ -157,7 +165,7 @@
             const reportModal = document.getElementById('report-modal');
             const qiblaLoader = document.getElementById('qibla-loader');
             const qiblaDisplay = document.getElementById('qibla-display');
-            const qiblaArrow = document.getElementById('qibla-arrow');
+            const qiblaArrowContainer = document.getElementById('qibla-arrow-container');
             const qiblaAngleEl = document.getElementById('qibla-angle');
             const qiblaErrorEl = document.getElementById('qibla-error');
             const emailForm = document.getElementById('email-form');
@@ -180,6 +188,7 @@
             let notifiedPrayers = {};
             let prayerHistory = [];
             let userEmail = '';
+            let qiblaDirection = 0;
 
             // --- Main Functions ---
 
@@ -303,18 +312,13 @@
             }
 
             function savePrayerHistory() {
-                // Keep only last 30 days to prevent localStorage bloat
-                if(prayerHistory.length > 30) {
-                    prayerHistory = prayerHistory.slice(prayerHistory.length - 30);
-                }
+                if(prayerHistory.length > 30) prayerHistory = prayerHistory.slice(prayerHistory.length - 30);
                 localStorage.setItem('prayerHistory', JSON.stringify(prayerHistory));
             }
 
             function loadPrayerHistory() {
                 const storedHistory = localStorage.getItem('prayerHistory');
-                if (storedHistory) {
-                    prayerHistory = JSON.parse(storedHistory);
-                }
+                if (storedHistory) prayerHistory = JSON.parse(storedHistory);
             }
             
             // --- Email & Reporting ---
@@ -336,11 +340,7 @@
                 const today = new Date();
                 const lastWeek = new Date(today);
                 lastWeek.setDate(today.getDate() - 7);
-
-                const weekData = prayerHistory.filter(record => {
-                    const recordDate = new Date(record.date);
-                    return recordDate >= lastWeek && recordDate <= today;
-                });
+                const weekData = prayerHistory.filter(r => new Date(r.date) >= lastWeek && new Date(r.date) <= today);
 
                 if (weekData.length === 0) {
                     reportContent.innerHTML = `<h2 class="text-2xl font-bold mb-4 text-center">Weekly Report</h2><p class="text-center text-gray-600">No prayer data tracked in the last 7 days.</p>`;
@@ -349,49 +349,21 @@
                 
                 const totals = { Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 };
                 let totalPrayers = 0;
-                weekData.forEach(day => {
-                    Object.keys(totals).forEach(prayer => {
-                        if (day.prayers[prayer]) {
-                            totals[prayer]++;
-                            totalPrayers++;
-                        }
-                    });
-                });
-
+                weekData.forEach(day => Object.keys(totals).forEach(p => { if (day.prayers[p]) { totals[p]++; totalPrayers++; } }));
                 const totalPossible = weekData.length * 5;
                 const overallPercentage = ((totalPrayers / totalPossible) * 100).toFixed(0);
 
-                let reportHTML = `
-                    <h2 class="text-2xl font-bold mb-2 text-center">Weekly Prayer Report</h2>
-                    <p class="text-center text-gray-500 mb-4">For: ${userEmail || 'No email set'}</p>
-                    <div class="text-center bg-blue-50 p-4 rounded-lg mb-4">
-                        <p class="text-lg">You completed</p>
-                        <p class="text-5xl font-bold text-blue-600">${overallPercentage}%</p>
-                        <p class="text-lg">of your prayers this week (${totalPrayers} of ${totalPossible}).</p>
-                    </div>
-                    <h3 class="font-semibold mt-6 mb-2">Breakdown by Prayer:</h3>
-                    <div class="space-y-2">
-                `;
-
+                let reportHTML = `<h2 class="text-2xl font-bold mb-2 text-center">Weekly Prayer Report</h2><p class="text-center text-gray-500 mb-4">For: ${userEmail || 'No email set'}</p><div class="text-center bg-blue-50 p-4 rounded-lg mb-4"><p class="text-lg">You completed</p><p class="text-5xl font-bold text-blue-600">${overallPercentage}%</p><p class="text-lg">of your prayers this week (${totalPrayers} of ${totalPossible}).</p></div><h3 class="font-semibold mt-6 mb-2">Breakdown by Prayer:</h3><div class="space-y-2">`;
                 Object.keys(totals).forEach(prayer => {
                     const percentage = ((totals[prayer] / weekData.length) * 100).toFixed(0);
-                    reportHTML += `
-                        <div class="flex items-center justify-between">
-                            <span class="font-medium">${prayer}</span>
-                            <div class="w-2/3 bg-gray-200 rounded-full h-4">
-                                <div class="bg-green-500 h-4 rounded-full text-xs text-white text-center" style="width: ${percentage}%">${percentage}%</div>
-                            </div>
-                            <span class="text-sm text-gray-600">${totals[prayer]}/${weekData.length}</span>
-                        </div>
-                    `;
+                    reportHTML += `<div class="flex items-center justify-between"><span class="font-medium">${prayer}</span><div class="w-2/3 bg-gray-200 rounded-full h-4"><div class="bg-green-500 h-4 rounded-full text-xs text-white text-center" style="width: ${percentage}%">${percentage}%</div></div><span class="text-sm text-gray-600">${totals[prayer]}/${weekData.length}</span></div>`;
                 });
-
                 reportHTML += `</div><p class="text-xs text-center mt-6 text-gray-400">This is a preview. In a full app, this report would be emailed to you.</p>`;
                 reportContent.innerHTML = reportHTML;
             }
 
             // --- Modals ---
-            function showModal(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+            function showModal(id) { document.getElementById(id).classList.add('flex'); document.getElementById(id).classList.remove('hidden'); }
             function hideModal(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
 
             // --- Qibla Compass ---
@@ -401,26 +373,70 @@
                 qiblaDisplay.classList.add('hidden');
                 qiblaErrorEl.classList.add('hidden');
                 if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(calculateQibla, handleLocationError);
+                    navigator.geolocation.getCurrentPosition(position => {
+                        calculateQiblaDirection(position);
+                        startGyroscopeListener();
+                    }, handleLocationError);
                 } else {
                     handleLocationError({ message: "Geolocation is not supported by this browser." });
                 }
             }
-            function calculateQibla(position) {
+            
+            function hideQiblaModal() {
+                hideModal('qibla-modal');
+                window.removeEventListener('deviceorientation', handleOrientation);
+            }
+
+            function calculateQiblaDirection(position) {
                 const userLat = position.coords.latitude; const userLon = position.coords.longitude;
                 const toRad = (deg) => deg * Math.PI / 180;
                 const lat1 = toRad(userLat); const lon1 = toRad(userLon); const lat2 = toRad(kaabaCoords.lat); const lon2 = toRad(kaabaCoords.lon);
                 const dLon = lon2 - lon1;
                 const y = Math.sin(dLon) * Math.cos(lat2);
                 const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-                let brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                qiblaDirection = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                
                 qiblaLoader.style.display = 'none';
                 qiblaDisplay.classList.remove('hidden');
-                qiblaArrow.style.transform = `rotate(${brng}deg)`;
-                qiblaAngleEl.textContent = `${brng.toFixed(2)}° from North`;
+                qiblaAngleEl.textContent = `${qiblaDirection.toFixed(2)}° from North`;
             }
+
+            function handleOrientation(event) {
+                // Use webkitCompassHeading for iOS compatibility, otherwise use alpha
+                let heading = event.webkitCompassHeading || event.alpha;
+                if (heading === null) {
+                    handleLocationError({ message: "Device orientation data is not available."});
+                    window.removeEventListener('deviceorientation', handleOrientation);
+                    return;
+                }
+                const rotation = qiblaDirection - heading;
+                qiblaArrowContainer.style.transform = `rotate(${rotation}deg)`;
+            }
+
+            async function startGyroscopeListener() {
+                // For iOS 13+, we need to request permission
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const permissionState = await DeviceOrientationEvent.requestPermission();
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        } else {
+                            handleLocationError({ message: "Permission for device orientation was denied." });
+                        }
+                    } catch (error) {
+                        handleLocationError(error);
+                    }
+                } else if ('DeviceOrientationEvent' in window) {
+                    // For other devices
+                    window.addEventListener('deviceorientation', handleOrientation);
+                } else {
+                    handleLocationError({ message: "Device orientation is not supported by this browser." });
+                }
+            }
+
             function handleLocationError(error) {
                 qiblaLoader.style.display = 'none';
+                qiblaDisplay.classList.add('hidden');
                 qiblaErrorEl.classList.remove('hidden');
                 qiblaErrorEl.textContent = `Error: ${error.message}`;
             }
@@ -437,11 +453,11 @@
                 if (permission === 'granted') {
                     notificationIcon.classList.replace('fa-bell-slash', 'fa-bell');
                     notificationBtn.title = 'Notifications enabled';
-                    notificationBtn.classList.replace('text-gray-400', 'text-green-500');
+                    notificationBtn.classList.replace('text-gray-600', 'text-green-500');
                 } else {
                     notificationIcon.classList.replace('fa-bell', 'fa-bell-slash');
                     notificationBtn.title = 'Enable Notifications';
-                    notificationBtn.classList.replace('text-green-500', 'text-gray-400');
+                    notificationBtn.classList.replace('text-green-500', 'text-gray-600');
                 }
             }
             async function requestNotificationPermission() {
@@ -467,7 +483,12 @@
                 showModal('report-modal');
             });
             document.querySelectorAll('.close-modal-btn').forEach(btn => {
-                btn.addEventListener('click', () => hideModal(btn.dataset.modal));
+                btn.addEventListener('click', () => {
+                    hideModal(btn.dataset.modal);
+                    if (btn.dataset.modal === 'qibla-modal') {
+                        window.removeEventListener('deviceorientation', handleOrientation);
+                    }
+                });
             });
             emailForm.addEventListener('submit', saveEmail);
             if ('Notification' in window) updateNotificationIcon(Notification.permission);
