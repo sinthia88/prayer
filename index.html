@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prayer Times Reminder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .prayer-card {
+            transition: all 0.3s ease-in-out;
+        }
+        .prayer-card.active {
+            transform: scale(1.05);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3), 0 4px 6px -2px rgba(59, 130, 246, 0.2);
+        }
+        .prayer-card.completed {
+            opacity: 0.6;
+            background-color: #f0f9ff; /* light blue */
+        }
+        .prayer-card.completed .check-icon {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .check-icon {
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.3s ease-in-out;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        #qibla-arrow {
+            transition: transform 0.5s ease-in-out;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app-container" class="min-h-screen flex flex-col items-center justify-center p-4">
+        
+        <div id="loader" class="flex flex-col items-center justify-center">
+            <div class="loader mb-4"></div>
+            <p class="text-lg text-gray-600">Fetching prayer times...</p>
+        </div>
+
+        <main id="main-content" class="w-full max-w-md mx-auto hidden">
+            <div class="bg-white rounded-2xl shadow-xl p-6 relative">
+                
+                <div class="flex justify-between items-center mb-6">
+                    <button id="qibla-btn" title="Qibla Direction" class="text-gray-400 hover:text-blue-500 transition-colors duration-300 focus:outline-none w-10 h-10">
+                        <i class="fas fa-compass text-2xl"></i>
+                    </button>
+                    <button id="settings-btn" title="Settings & Report" class="text-gray-400 hover:text-blue-500 transition-colors duration-300 focus:outline-none w-10 h-10">
+                        <i class="fas fa-cog text-2xl"></i>
+                    </button>
+                    <div class="text-center absolute left-1/2 -translate-x-1/2">
+                        <h1 id="current-date" class="text-lg font-bold text-gray-800"></h1>
+                        <p id="location" class="text-sm text-blue-600 font-medium">Dhaka, Bangladesh</p>
+                    </div>
+                    <button id="notification-btn" title="Enable Notifications" class="text-gray-400 hover:text-blue-500 transition-colors duration-300 focus:outline-none w-10 h-10">
+                        <i class="fas fa-bell-slash text-2xl"></i>
+                    </button>
+                </div>
+
+                <section id="countdown-section" class="text-center mb-6 p-4 bg-blue-500 text-white rounded-xl shadow-lg">
+                    <h2 id="next-prayer-name" class="text-2xl font-bold"></h2>
+                    <p class="text-sm">is in</p>
+                    <p id="countdown-timer" class="text-4xl font-bold mt-1 tracking-wider"></p>
+                </section>
+
+                <section id="prayer-times" class="space-y-3">
+                    <!-- Prayer cards will be injected here by JavaScript -->
+                </section>
+
+            </div>
+            <footer class="text-center mt-6 text-gray-500 text-sm">
+                <p>Prayer times by <a href="https://www.youtube.com/@tawhidhasan4468" target="_blank" class="text-blue-500 hover:underline">Hasan</a>.</p>
+            </footer>
+        </main>
+
+        <!-- Modals -->
+        <div id="qibla-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl shadow-xl p-6 text-center max-w-sm w-full relative">
+                <button class="close-modal-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl" data-modal="qibla-modal">&times;</button>
+                <h2 class="text-2xl font-bold mb-4">Qibla Direction</h2>
+                <div id="qibla-loader" class="flex flex-col items-center justify-center my-4"><div class="loader mb-2"></div><p>Getting your location...</p></div>
+                <div id="qibla-display" class="hidden"><div class="relative w-48 h-48 mx-auto my-4"><img src="https://placehold.co/200x200/ffffff/cccccc?text=Compass" class="w-full h-full" alt="Compass Base"/><div id="qibla-arrow" class="absolute inset-0 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500"><path d="M12 2L12 22M12 2L6 8M12 2L18 8"/></svg></div></div><p id="qibla-angle" class="text-lg font-semibold"></p><p class="text-sm text-gray-500 mt-2">Point the top of your device towards North to align.</p></div>
+                <p id="qibla-error" class="text-red-500 hidden"></p>
+            </div>
+        </div>
+
+        <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full relative">
+                <button class="close-modal-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl" data-modal="settings-modal">&times;</button>
+                <h2 class="text-2xl font-bold mb-6 text-center">Settings & Report</h2>
+                <form id="email-form">
+                    <label for="email-input" class="block text-sm font-medium text-gray-700">Your Email for Reports</label>
+                    <div class="mt-1 flex rounded-md shadow-sm">
+                        <input type="email" id="email-input" class="focus:ring-blue-500 focus:border-blue-500 flex-1 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300 p-2" placeholder="you@example.com">
+                        <button type="submit" class="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">Save</button>
+                    </div>
+                    <p id="email-saved-msg" class="text-green-600 text-sm mt-1 hidden">Email saved!</p>
+                </form>
+                <div class="mt-6 pt-6 border-t">
+                    <button id="report-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        View Weekly Prayer Report
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full relative">
+                 <button class="close-modal-btn absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl" data-modal="report-modal">&times;</button>
+                 <div id="report-content"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const loader = document.getElementById('loader');
+            const mainContent = document.getElementById('main-content');
+            const currentDateEl = document.getElementById('current-date');
+            const nextPrayerNameEl = document.getElementById('next-prayer-name');
+            const countdownTimerEl = document.getElementById('countdown-timer');
+            const prayerTimesContainer = document.getElementById('prayer-times');
+            const notificationBtn = document.getElementById('notification-btn');
+            const notificationIcon = notificationBtn.querySelector('i');
+            const qiblaBtn = document.getElementById('qibla-btn');
+            const settingsBtn = document.getElementById('settings-btn');
+            const qiblaModal = document.getElementById('qibla-modal');
+            const settingsModal = document.getElementById('settings-modal');
+            const reportModal = document.getElementById('report-modal');
+            const qiblaLoader = document.getElementById('qibla-loader');
+            const qiblaDisplay = document.getElementById('qibla-display');
+            const qiblaArrow = document.getElementById('qibla-arrow');
+            const qiblaAngleEl = document.getElementById('qibla-angle');
+            const qiblaErrorEl = document.getElementById('qibla-error');
+            const emailForm = document.getElementById('email-form');
+            const emailInput = document.getElementById('email-input');
+            const emailSavedMsg = document.getElementById('email-saved-msg');
+            const reportBtn = document.getElementById('report-btn');
+            const reportContent = document.getElementById('report-content');
+
+            // --- Configuration ---
+            const city = 'Dhaka';
+            const country = 'Bangladesh';
+            const method = 4;
+            const notificationLeadMinutes = 10;
+            const kaabaCoords = { lat: 21.4225, lon: 39.8262 };
+            const prayerNames = { Fajr: 'fa-moon', Dhuhr: 'fa-sun', Asr: 'fa-cloud-sun', Maghrib: 'fa-cloud-moon', Isha: 'fa-star-and-crescent' };
+            
+            // --- State Variables ---
+            let prayerTimesData = {};
+            let countdownInterval;
+            let notifiedPrayers = {};
+            let prayerHistory = [];
+            let userEmail = '';
+
+            // --- Main Functions ---
+
+            async function initializeApp() {
+                loadPrayerHistory();
+                loadEmail();
+                await getPrayerTimes();
+            }
+
+            async function getPrayerTimes() {
+                try {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = today.getMonth() + 1;
+                    const apiUrl = `https://api.aladhan.com/v1/calendarByCity/${year}/${month}?city=${city}&country=${country}&method=${method}`;
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) throw new Error(`API error! status: ${response.status}`);
+                    const data = await response.json();
+                    const dayOfMonth = today.getDate() - 1;
+                    if (data.data && data.data[dayOfMonth]) {
+                        prayerTimesData = data.data[dayOfMonth].timings;
+                        displayPrayerTimes();
+                        startCountdown();
+                        loader.style.display = 'none';
+                        mainContent.classList.remove('hidden');
+                    } else {
+                        throw new Error('Could not find prayer times for today.');
+                    }
+                } catch (error) {
+                    console.error("Error fetching prayer times:", error);
+                    loader.innerHTML = `<p class="text-red-500 text-center">Could not load prayer times.<br>Please try again later.</p>`;
+                }
+            }
+            
+            function displayPrayerTimes() {
+                const today = new Date();
+                currentDateEl.textContent = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                prayerTimesContainer.innerHTML = '';
+                const todayRecord = getTodayPrayerRecord();
+
+                Object.keys(prayerNames).forEach(name => {
+                    const time = prayerTimesData[name].split(' ')[0];
+                    const iconClass = prayerNames[name];
+                    const isCompleted = todayRecord.prayers[name];
+                    
+                    const card = document.createElement('div');
+                    card.className = `prayer-card flex items-center justify-between p-3 rounded-lg shadow-sm border ${isCompleted ? 'completed' : 'bg-white'}`;
+                    card.id = `prayer-${name}`;
+                    card.innerHTML = `<div class="flex items-center gap-4"><i class="fas ${iconClass} text-xl text-blue-500 w-6 text-center"></i><div><h3 class="text-lg font-semibold text-gray-800">${name}</h3><p class="text-md font-medium text-gray-600">${formatTime(time)}</p></div></div><button class="check-btn p-2" data-prayer="${name}"><div class="w-8 h-8 rounded-full flex items-center justify-center ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}"><i class="fas fa-check text-white check-icon"></i></div></button>`;
+                    prayerTimesContainer.appendChild(card);
+                });
+
+                document.querySelectorAll('.check-btn').forEach(btn => {
+                    btn.addEventListener('click', () => togglePrayerCompletion(btn.dataset.prayer));
+                });
+            }
+
+            function findNextPrayer() {
+                const now = new Date();
+                const prayerSchedule = Object.keys(prayerNames).map(name => {
+                    const [hours, minutes] = prayerTimesData[name].split(' ')[0].split(':');
+                    const prayerDate = new Date();
+                    prayerDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+                    return { name, time: prayerDate };
+                });
+                for (const prayer of prayerSchedule) {
+                    if (prayer.time > now) return { name: prayer.name, time: prayer.time };
+                }
+                const [h, m] = prayerTimesData['Fajr'].split(' ')[0].split(':');
+                const nextFajr = new Date();
+                nextFajr.setDate(nextFajr.getDate() + 1);
+                nextFajr.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+                return { name: 'Fajr', time: nextFajr };
+            }
+
+            function startCountdown() {
+                if (countdownInterval) clearInterval(countdownInterval);
+                countdownInterval = setInterval(() => {
+                    const nextPrayer = findNextPrayer();
+                    const now = new Date();
+                    const diff = nextPrayer.time.getTime() - now.getTime();
+                    if (diff <= 0) { setTimeout(startCountdown, 2000); return; }
+                    const leadTimeMs = notificationLeadMinutes * 60 * 1000;
+                    if (diff > 0 && diff <= leadTimeMs && !notifiedPrayers[nextPrayer.name]) {
+                        sendNotification(nextPrayer.name);
+                        notifiedPrayers[nextPrayer.name] = true;
+                    }
+                    const hours = Math.floor(diff / 3600000);
+                    const minutes = Math.floor((diff % 3600000) / 60000);
+                    const seconds = Math.floor((diff % 60000) / 1000);
+                    nextPrayerNameEl.textContent = nextPrayer.name;
+                    countdownTimerEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    updateActivePrayerCard(nextPrayer.name);
+                }, 1000);
+            }
+
+            function updateActivePrayerCard(nextPrayerName) {
+                document.querySelectorAll('.prayer-card').forEach(card => card.classList.remove('active'));
+                const activeCard = document.getElementById(`prayer-${nextPrayerName}`);
+                if (activeCard) activeCard.classList.add('active');
+            }
+
+            // --- Prayer Tracking & History ---
+            
+            function getTodayPrayerRecord() {
+                const todayStr = new Date().toISOString().split('T')[0];
+                let todayRecord = prayerHistory.find(r => r.date === todayStr);
+                if (!todayRecord) {
+                    todayRecord = { date: todayStr, prayers: { Fajr: false, Dhuhr: false, Asr: false, Maghrib: false, Isha: false } };
+                    prayerHistory.push(todayRecord);
+                }
+                return todayRecord;
+            }
+
+            function togglePrayerCompletion(prayerName) {
+                const todayRecord = getTodayPrayerRecord();
+                todayRecord.prayers[prayerName] = !todayRecord.prayers[prayerName];
+                savePrayerHistory();
+                displayPrayerTimes();
+                updateActivePrayerCard(findNextPrayer().name);
+            }
+
+            function savePrayerHistory() {
+                // Keep only last 30 days to prevent localStorage bloat
+                if(prayerHistory.length > 30) {
+                    prayerHistory = prayerHistory.slice(prayerHistory.length - 30);
+                }
+                localStorage.setItem('prayerHistory', JSON.stringify(prayerHistory));
+            }
+
+            function loadPrayerHistory() {
+                const storedHistory = localStorage.getItem('prayerHistory');
+                if (storedHistory) {
+                    prayerHistory = JSON.parse(storedHistory);
+                }
+            }
+            
+            // --- Email & Reporting ---
+
+            function saveEmail(e) {
+                e.preventDefault();
+                userEmail = emailInput.value;
+                localStorage.setItem('userEmail', userEmail);
+                emailSavedMsg.classList.remove('hidden');
+                setTimeout(() => emailSavedMsg.classList.add('hidden'), 2000);
+            }
+
+            function loadEmail() {
+                userEmail = localStorage.getItem('userEmail') || '';
+                emailInput.value = userEmail;
+            }
+
+            function generateWeeklyReport() {
+                const today = new Date();
+                const lastWeek = new Date(today);
+                lastWeek.setDate(today.getDate() - 7);
+
+                const weekData = prayerHistory.filter(record => {
+                    const recordDate = new Date(record.date);
+                    return recordDate >= lastWeek && recordDate <= today;
+                });
+
+                if (weekData.length === 0) {
+                    reportContent.innerHTML = `<h2 class="text-2xl font-bold mb-4 text-center">Weekly Report</h2><p class="text-center text-gray-600">No prayer data tracked in the last 7 days.</p>`;
+                    return;
+                }
+                
+                const totals = { Fajr: 0, Dhuhr: 0, Asr: 0, Maghrib: 0, Isha: 0 };
+                let totalPrayers = 0;
+                weekData.forEach(day => {
+                    Object.keys(totals).forEach(prayer => {
+                        if (day.prayers[prayer]) {
+                            totals[prayer]++;
+                            totalPrayers++;
+                        }
+                    });
+                });
+
+                const totalPossible = weekData.length * 5;
+                const overallPercentage = ((totalPrayers / totalPossible) * 100).toFixed(0);
+
+                let reportHTML = `
+                    <h2 class="text-2xl font-bold mb-2 text-center">Weekly Prayer Report</h2>
+                    <p class="text-center text-gray-500 mb-4">For: ${userEmail || 'No email set'}</p>
+                    <div class="text-center bg-blue-50 p-4 rounded-lg mb-4">
+                        <p class="text-lg">You completed</p>
+                        <p class="text-5xl font-bold text-blue-600">${overallPercentage}%</p>
+                        <p class="text-lg">of your prayers this week (${totalPrayers} of ${totalPossible}).</p>
+                    </div>
+                    <h3 class="font-semibold mt-6 mb-2">Breakdown by Prayer:</h3>
+                    <div class="space-y-2">
+                `;
+
+                Object.keys(totals).forEach(prayer => {
+                    const percentage = ((totals[prayer] / weekData.length) * 100).toFixed(0);
+                    reportHTML += `
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">${prayer}</span>
+                            <div class="w-2/3 bg-gray-200 rounded-full h-4">
+                                <div class="bg-green-500 h-4 rounded-full text-xs text-white text-center" style="width: ${percentage}%">${percentage}%</div>
+                            </div>
+                            <span class="text-sm text-gray-600">${totals[prayer]}/${weekData.length}</span>
+                        </div>
+                    `;
+                });
+
+                reportHTML += `</div><p class="text-xs text-center mt-6 text-gray-400">This is a preview. In a full app, this report would be emailed to you.</p>`;
+                reportContent.innerHTML = reportHTML;
+            }
+
+            // --- Modals ---
+            function showModal(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+            function hideModal(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+
+            // --- Qibla Compass ---
+            function showQiblaModal() {
+                showModal('qibla-modal');
+                qiblaLoader.style.display = 'flex';
+                qiblaDisplay.classList.add('hidden');
+                qiblaErrorEl.classList.add('hidden');
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(calculateQibla, handleLocationError);
+                } else {
+                    handleLocationError({ message: "Geolocation is not supported by this browser." });
+                }
+            }
+            function calculateQibla(position) {
+                const userLat = position.coords.latitude; const userLon = position.coords.longitude;
+                const toRad = (deg) => deg * Math.PI / 180;
+                const lat1 = toRad(userLat); const lon1 = toRad(userLon); const lat2 = toRad(kaabaCoords.lat); const lon2 = toRad(kaabaCoords.lon);
+                const dLon = lon2 - lon1;
+                const y = Math.sin(dLon) * Math.cos(lat2);
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                let brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                qiblaLoader.style.display = 'none';
+                qiblaDisplay.classList.remove('hidden');
+                qiblaArrow.style.transform = `rotate(${brng}deg)`;
+                qiblaAngleEl.textContent = `${brng.toFixed(2)}° from North`;
+            }
+            function handleLocationError(error) {
+                qiblaLoader.style.display = 'none';
+                qiblaErrorEl.classList.remove('hidden');
+                qiblaErrorEl.textContent = `Error: ${error.message}`;
+            }
+            
+            // --- Notifications & Helpers ---
+            function formatTime(timeString) {
+                const [hour, minute] = timeString.split(':');
+                const h = parseInt(hour, 10);
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const formattedHour = h % 12 || 12;
+                return `${formattedHour}:${String(minute).padStart(2, '0')} ${ampm}`;
+            }
+            function updateNotificationIcon(permission) {
+                if (permission === 'granted') {
+                    notificationIcon.classList.replace('fa-bell-slash', 'fa-bell');
+                    notificationBtn.title = 'Notifications enabled';
+                    notificationBtn.classList.replace('text-gray-400', 'text-green-500');
+                } else {
+                    notificationIcon.classList.replace('fa-bell', 'fa-bell-slash');
+                    notificationBtn.title = 'Enable Notifications';
+                    notificationBtn.classList.replace('text-green-500', 'text-gray-400');
+                }
+            }
+            async function requestNotificationPermission() {
+                if (!('Notification' in window)) return;
+                const permission = await Notification.requestPermission();
+                updateNotificationIcon(permission);
+            }
+            function sendNotification(prayerName) {
+                if (Notification.permission === 'granted') {
+                    new Notification('Prayer Time Reminder', {
+                        body: `${prayerName} is in ${notificationLeadMinutes} minutes!`,
+                        icon: 'https://placehold.co/192x192/3b82f6/ffffff?text=P'
+                    });
+                }
+            }
+
+            // --- Event Listeners ---
+            notificationBtn.addEventListener('click', requestNotificationPermission);
+            qiblaBtn.addEventListener('click', showQiblaModal);
+            settingsBtn.addEventListener('click', () => showModal('settings-modal'));
+            reportBtn.addEventListener('click', () => {
+                generateWeeklyReport();
+                showModal('report-modal');
+            });
+            document.querySelectorAll('.close-modal-btn').forEach(btn => {
+                btn.addEventListener('click', () => hideModal(btn.dataset.modal));
+            });
+            emailForm.addEventListener('submit', saveEmail);
+            if ('Notification' in window) updateNotificationIcon(Notification.permission);
+            
+            // --- Initial Load ---
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
